@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{177830C2-4AF9-48E1-A2FA-6196DF3516F7}</ProjectGuid>
+    <ProjectGuid>{80831518-657C-4C6F-936D-0A74871F3048}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>jac.mp</RootNamespace>
-    <AssemblyName>jac.mp</AssemblyName>
+    <RootNamespace>jac.mp.all_to_all</RootNamespace>
+    <AssemblyName>jac.mp.all-to-all</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -39,9 +39,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="IMembershipProtocol.cs" />
-    <Compile Include="Node.cs" />
+    <Compile Include="AllToAllProtocol.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\jac.mp\jac.mp.csproj">
+      <Project>{177830c2-4af9-48e1-a2fa-6196df3516f7}</Project>
+      <Name>jac.mp</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
