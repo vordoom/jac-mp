@@ -6,16 +6,16 @@ using System.Threading.Tasks;
 
 namespace jac.mp
 {
-    public class AllToAllProtocol<TNodeData> : IMembershipProtocol<TNodeData>
+    public class AllToAllProtocol : IMembershipProtocol
     {
-        public IEnumerable<Node<TNodeData>> Nodes
+        public IEnumerable<Node> Nodes
         {
             get { throw new NotImplementedException(); }
         }
 
-        public event EventHandler<Node<TNodeData>> NodeJoined;
+        public event EventHandler<Node> NodeJoined;
 
-        public event EventHandler<Node<TNodeData>> NodeFailed;
+        public event EventHandler<Node> NodeFailed;
 
         public void Start()
         {

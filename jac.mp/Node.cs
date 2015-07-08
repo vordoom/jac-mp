@@ -6,10 +6,9 @@ using System.Threading.Tasks;
 
 namespace jac.mp
 {
-    public class Node<T>
+    public class Node
     {
         public Uri Address { get; private set; }
-        public T Data { get; set; }
 
         public Node(Uri address)
         {
