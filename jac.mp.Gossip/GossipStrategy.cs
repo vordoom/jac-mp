@@ -85,7 +85,7 @@ namespace jac.mp.Gossip
             _log = LogManager.GetLogger(this.GetType());
 
             _transport = transport;
-            _transport.IncomingPingRequestHandler = OnPingRequest;
+            _transport.IncomingPingCallback = OnPingRequest;
             _activeNodes = _membersList.Values.Select(a => a.NodeData);
 
             // try to get local URI
@@ -122,7 +122,7 @@ namespace jac.mp.Gossip
             int number = _configuration.RequestsPerUpdate < _membersList.Count ? _configuration.RequestsPerUpdate : _membersList.Count;
             for (int i = 0; i < number; i++)
             {
-                var index = _random.Next(number);
+                var index = _random.Next(_membersList.Count);
                 var nodeUri = _membersList.Keys.ElementAt(index);
 
                 Ping(nodeUri);
@@ -161,6 +161,8 @@ namespace jac.mp.Gossip
                 var dict = GetNodesInformation();
 
                 var result = _transport.Ping(nodeUri, dict);
+
+                _membersList[nodeUri].Timestamp = _timeStamp;
 
                 UpdateMembers(result);
             }

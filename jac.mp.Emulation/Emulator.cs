@@ -1,5 +1,6 @@
 ﻿using jac.mp.Gossip;
 using jac.mp.Gossip.Configuration;
+using log4net;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -19,18 +20,22 @@ namespace jac.mp.Emulation
 
         //nodes.Where(a=>a.Address != nodes[i].Address).OrderBy(a => random.Next()).Select(a=> a.Address).ToArray(), 
 
-        private const int randomSeed = 10;
+        private const int randomSeed = 110;
         private int numOfIterations = 100;
-        private int numOfNodes = 10;
+        private int numOfNodes = 100;
         private int numOfFailedNodes = 1;
         private double networkFailureProbability = 0;
         private Random random = new Random(randomSeed);
         private Dictionary<Uri, IEmulatorTransport> transports = new Dictionary<Uri, IEmulatorTransport>();
         private List<Uri> nodes = new List<Uri>();
         private Dictionary<Uri, IStrategy> strategies = new Dictionary<Uri, IStrategy>();
+        private ILog _log;
+        private int nodesCounter;
 
         Emulator()
         {
+            _log = LogManager.GetLogger(this.GetType());
+
             var list = new List<Uri>();
             for (int i = 0; i < numOfNodes; i++)
                 list.Add(new Uri("tcp://127.0.0." + i.ToString()));
@@ -38,11 +43,12 @@ namespace jac.mp.Emulation
             nodes = list.OrderBy(a => random.Next()).ToList();
 
             var config = GossipConfiguration.DefaultConfiguration;
-            config.RandomSeed = randomSeed;
+            config.RequestsPerUpdate = 1;
 
             for (int i = 0; i < numOfNodes; i++ )
             {
                 var transport = new GossipEmulatorTransport(nodes[i], transports);
+                config.RandomSeed = randomSeed + i;
 
                 GossipStrategy strat = null;
                 if (i == 0)
@@ -60,36 +66,65 @@ namespace jac.mp.Emulation
 
         void Start()
         {
+            bool resolve = true;
+
             for (int i = 0; i < numOfIterations; i++)
             {
-                foreach (var v in strategies.Values)
-                    v.Update();
+                foreach (var v in strategies.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a.Key) == false).OrderBy(a => random.Next()))
+                    v.Value.Update();
 
-                var r = strategies.All(
-                    x => nodes
-                        .Where(a => a != x.Key)
-                        .All(a => x.Value.Nodes.Any(b => b.Address == a))
-                );
+                if (resolve)
+                {
+                    var n = strategies.Count - 1;
+                    if (nodesCounter == n * n)
+                    {
+                        var r = strategies.All(
+                            x => nodes
+                                .Where(a => a != x.Key)
+                                .All(a => x.Value.Nodes.Any(b => b.Address == a))
+                        );
 
-                if (r == true)
-                    Debug.WriteLine("All nodes on iteration {0}", i);
+                        if (r == true)
+                        {
+                            _log.DebugFormat("All nodes reported full membership list on iteration '{0}'", i);
+                            resolve = false;
+
+                            var v = random.Next(strategies.Count);
+                            transports.ElementAt(v).Value.Fail = true;
+                        }
+                    }
+                }
+                else
+                {
+                    var n = strategies.Count - 1 - numOfFailedNodes;
+
+                    if (nodesCounter == n * (strategies.Count - 1))
+                    {
+                        var r = strategies.Where(a => transports.Where(b=>b.Value.Fail).Select(b=>b.Key).Contains(a.Key) == false).All(
+                            x => nodes.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a) == false)
+                                .Where(a => a != x.Key)
+                                .All(a => x.Value.Nodes.Any(b => b.Address == a))
+                        );
+
+                        if (r == true)
+                        {
+                            _log.DebugFormat("All nodes detected failed one at iteration '{0}'", i);
+
+                            break;
+                        }
+                    }
+                }
             }
         }
 
         void s_NodeFailed(object sender, Node e)
         {
-            throw new NotImplementedException();
+            nodesCounter--;
         }
 
         void s_NodeJoined(object sender, Node e)
         {
-        //    var s = sender as IStrategy;
-        //    var uri = strategies.Where(a => a.Value == s).First().Key;
-
-        //    bool all = nodes.Where(a => a != uri).All(a => s.Nodes.Any(b => b.Address == a));
-
-        //    if (all)
-        //        Debug.WriteLine("{0} has all nodes", uri);
+            nodesCounter++;
         }
 
         static void Main()
@@ -102,7 +137,6 @@ namespace jac.mp.Emulation
     public class GossipEmulatorTransport : IGossipTransport, IEmulatorTransport
     {
         Dictionary<Uri, IEmulatorTransport> _transports;
-        bool _fail;
         PingRequestHandler _pingRequestHandler = null;
 
         public Uri LocalUri
@@ -119,24 +153,21 @@ namespace jac.mp.Emulation
 
         public KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] nodesInformation)
         {
-            if(_fail)
+            if (Fail)
                 throw new Exception("Emulator network exception");
 
             var transport = _transports[nodeUri] as GossipEmulatorTransport;
 
-            return transport.IncomingPingRequestHandler(nodesInformation);
+            return transport.IncomingPingCallback(nodesInformation);
         }
 
-        public void Fail()
-        {
-            _fail = true;
-        }
+        public bool Fail { get; set; }
 
-        public PingRequestHandler IncomingPingRequestHandler
+        public PingRequestHandler IncomingPingCallback
         {
             get
             {
-                if(_fail)
+                if (Fail)
                     throw new Exception("Emulator network exception");
 
                 return _pingRequestHandler;
@@ -150,7 +181,7 @@ namespace jac.mp.Emulation
 
     public interface IEmulatorTransport
     {
-        void Fail();
+        bool Fail { get; set; }
     }
 
 
