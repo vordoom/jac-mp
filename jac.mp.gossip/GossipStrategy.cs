@@ -6,7 +6,6 @@ using log4net;
 
 namespace jac.mp.gossip
 {
-    // todo: node fail
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
@@ -15,6 +14,8 @@ namespace jac.mp.gossip
     public class GossipStrategy : IStrategy
     {
         private const int NumbersOfReceivers = 2;
+        private const int FailTimeout = 5;
+        private const int RemoveTimeout = 15;
 
         private readonly IGossipTransport _transport;
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
@@ -23,15 +24,15 @@ namespace jac.mp.gossip
         private readonly ILog _log = null;
         private long _heartbeat;
         private long _timeStamp;
-        private IEnumerable<Node> _nodes;
-
-        public IEnumerable<Node> Nodes
-        {
-            get { return _nodes; }
-        }
+        private IEnumerable<Node> _activeNodes;
 
         public event EventHandler<Node> NodeJoined;
         public event EventHandler<Node> NodeFailed;
+
+        public IEnumerable<Node> Nodes
+        {
+            get { return _activeNodes; }
+        }
 
         /// <summary>
         /// Constructor.
@@ -66,7 +67,7 @@ namespace jac.mp.gossip
             _random = new Random();
             _ownData = ownData;
             _log = LogManager.GetLogger(this.GetType());
-            _nodes = _membersList.Values.Select(a => a.NodeData);
+            _activeNodes = _membersList.Values.Select(a => a.NodeData);
 
             foreach (var n in nodes)
             {
@@ -95,7 +96,22 @@ namespace jac.mp.gossip
                 Ping(nodeUri);
             }
 
-            // process failed nodes
+            // process not responding nodes -> mark as failed
+            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - FailTimeout).Select(a => a.Value);
+            foreach (var v in result)
+            {
+                v.State = MemberState.Failed;
+            }
+
+            // process nodes to remove
+            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - RemoveTimeout).Select(a => a.Value);
+            foreach (var v in result)
+            {
+                var node = v.NodeData;
+                _membersList.Remove(node.Address);
+
+                OnNodeFailed(node);
+            }
         }
 
         /// <summary>
@@ -106,7 +122,8 @@ namespace jac.mp.gossip
         {
             Interlocked.Increment(ref _heartbeat);
 
-            var dict = GetMembersDictionary();
+            var dict = _membersList.Where(a => a.Value.State == MemberState.Ok).ToDictionary(a => a.Key, a => a.Value.Heartbeat);
+            dict.Add(_ownData.Address, _heartbeat);
 
             try
             {
@@ -128,14 +145,20 @@ namespace jac.mp.gossip
         {
             foreach (var kv in result)
             {
-                if (_membersList.ContainsKey(kv.Key))
+                if (_membersList.ContainsKey(kv.Key) == false)
                 {
-                    _membersList[kv.Key].Heartbeat = kv.Value;
-                    _membersList[kv.Key].Timestamp = _timeStamp;
+                    AddNewNode(kv.Key, kv.Value);
                 }
                 else
                 {
-                    AddNewNode(kv.Key, kv.Value);
+                    var node = _membersList[kv.Key];
+
+                    if (node.Heartbeat < kv.Value)
+                    {
+                        node.Heartbeat = kv.Value;
+                        node.Timestamp = _timeStamp;
+                        node.State = MemberState.Ok;
+                    }
                 }
             }
         }
@@ -159,19 +182,6 @@ namespace jac.mp.gossip
             
             OnNodeJoined(node.NodeData);
         }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private Dictionary<Uri,long> GetMembersDictionary()
-        {
-            var dict = _membersList.ToDictionary(a => a.Key, a => a.Value.Heartbeat);
-            dict.Add(_ownData.Address, _heartbeat);
-
-            return dict;
-        }
-
 
         /// <summary>
         /// 
@@ -201,7 +211,6 @@ namespace jac.mp.gossip
     public enum MemberState
     {
         Ok,
-        Suspected,
         Failed
     }
 }
