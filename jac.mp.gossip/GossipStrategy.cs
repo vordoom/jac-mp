@@ -9,7 +9,7 @@ namespace jac.mp.gossip
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
-    // todo: check other multythreading issues
+    // todo: check other multythreading issues (client read Nodes / gossip updates members -> exception)
     // todo: should not be 'blackout' situation, when all nodes removed (no-one to ping)
 
     public class GossipStrategy : IStrategy
