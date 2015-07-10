@@ -6,6 +6,7 @@ using log4net;
 
 namespace jac.mp.gossip
 {
+    // todo: next -> must send 'node' object in events
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
