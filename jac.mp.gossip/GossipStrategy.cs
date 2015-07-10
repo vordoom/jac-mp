@@ -6,7 +6,7 @@ using log4net;
 
 namespace jac.mp.gossip
 {
-    // todo: next -> must send 'node' object in events
+    // todo: node fail
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
@@ -19,14 +19,15 @@ namespace jac.mp.gossip
         private readonly IGossipTransport _transport;
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
         private readonly Random _random;
-        private readonly Uri _ownUri;
+        private readonly Node _ownData;
         private readonly ILog _log = null;
         private long _heartbeat;
         private long _timeStamp;
+        private IEnumerable<Node> _nodes;
 
         public IEnumerable<Node> Nodes
         {
-            get { throw new NotImplementedException(); }
+            get { return _nodes; }
         }
 
         public event EventHandler<Node> NodeJoined;
@@ -35,18 +36,15 @@ namespace jac.mp.gossip
         /// <summary>
         /// Constructor.
         /// </summary>
-        public GossipStrategy()
-        {
-
-        }
+        public GossipStrategy() { }
 
         /// <summary>
         /// Constructor.
         /// </summary>
         /// <param name="node"></param>
         /// <param name="transport"></param>
-        public GossipStrategy(Uri node, IGossipTransport transport) 
-            : this(new Uri[] { node }, transport)
+        public GossipStrategy(Node ownData, Uri node, IGossipTransport transport) 
+            : this(ownData, new Uri[] { node }, transport)
         { }
 
         /// <summary>
@@ -54,7 +52,7 @@ namespace jac.mp.gossip
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="transport"></param>
-        public GossipStrategy(Uri[] nodes, IGossipTransport transport)
+        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport)
         {
             if (transport == null)
                 throw new ArgumentNullException("transport");
@@ -66,8 +64,9 @@ namespace jac.mp.gossip
             _heartbeat = 0;
             _timeStamp = 0;
             _random = new Random();
-            _ownUri = new Uri("127.0.0.1");
+            _ownData = ownData;
             _log = LogManager.GetLogger(this.GetType());
+            _nodes = _membersList.Values.Select(a => a.NodeData);
 
             foreach (var n in nodes)
             {
@@ -79,7 +78,8 @@ namespace jac.mp.gossip
                     {
                         Heartbeat = 0,
                         State = MemberState.Ok,
-                        Timestamp = _timeStamp
+                        Timestamp = _timeStamp,
+                        NodeData = new Node(n)
                     });
             }
         }
@@ -142,15 +142,17 @@ namespace jac.mp.gossip
                 }
                 else
                 {
-                    _membersList.Add(kv.Key,
-                    new MemberInfo()
+                    var node = new MemberInfo()
                     {
                         Heartbeat = kv.Value,
                         State = MemberState.Ok,
-                        Timestamp = _timeStamp
-                    });
+                        Timestamp = _timeStamp,
+                        NodeData = new Node(kv.Key)
+                    };
 
-                    OnNodeJoined(kv.Key);
+                    _membersList.Add(kv.Key, node);
+
+                    OnNodeJoined(node.NodeData);
                 }
             }
         }
@@ -162,7 +164,7 @@ namespace jac.mp.gossip
         private Dictionary<Uri,long> GetMembersDictionary()
         {
             var dict = _membersList.ToDictionary(a => a.Key, a => a.Value.Heartbeat);
-            dict.Add(_ownUri, _heartbeat);
+            dict.Add(_ownData.Address, _heartbeat);
 
             return dict;
         }
@@ -171,17 +173,17 @@ namespace jac.mp.gossip
         /// <summary>
         /// 
         /// </summary>
-        private void OnNodeJoined(Uri uri)
+        private void OnNodeJoined(Node node)
         {
-            NodeJoined.Raise(this, null);
+            NodeJoined.Raise(this, node);
         }
 
         /// <summary>
         /// 
         /// </summary>
-        private void OnNodeFailed()
+        private void OnNodeFailed(Node node)
         {
-            NodeFailed.Raise(this, null);
+            NodeFailed.Raise(this, node);
         }
     }
 
@@ -190,6 +192,7 @@ namespace jac.mp.gossip
         public long Heartbeat { get; set; }
         public long Timestamp { get; set; }
         public MemberState State { get; set; }
+        public Node NodeData { get; set; }
     }
 
     public enum MemberState

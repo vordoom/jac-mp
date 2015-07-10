@@ -35,6 +35,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="NSubstitute">
+      <HintPath>..\packages\NSubstitute.1.8.2.0\lib\net45\NSubstitute.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
   </ItemGroup>
   <Choose>
@@ -52,6 +55,19 @@
   <ItemGroup>
     <Compile Include="GossipStrategyTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\jac.mp.gossip\jac.mp.gossip.csproj">
+      <Project>{137d77c8-5c1f-41a2-afc0-9a57c97dc8e0}</Project>
+      <Name>jac.mp.gossip</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\jac.mp\jac.mp.csproj">
+      <Project>{177830c2-4af9-48e1-a2fa-6196df3516f7}</Project>
+      <Name>jac.mp</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Choose>
     <When Condition="'$(VisualStudioVersion)' == '10.0' And '$(IsCodedUITest)' == 'True'">
