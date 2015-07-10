@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Configuration\GossipConfiguration.cs" />
+    <Compile Include="Configuration\GossipConfigurationSection.cs" />
     <Compile Include="GossipStrategy.cs" />
     <Compile Include="IGossipTransport.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

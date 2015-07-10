@@ -6,8 +6,13 @@ using System.Threading.Tasks;
 
 namespace jac.mp.Gossip
 {
+    public delegate KeyValuePair<Uri, long>[] PingRequestHandler(KeyValuePair<Uri, long>[] nodesInformation);
+
     public interface IGossipTransport
     {
-        KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] keyValuePair);
+        Uri LocalUri { get; }
+        PingRequestHandler IncomingPingRequestHandler { get; set; }
+
+        KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] nodesInformation);
     }
 }

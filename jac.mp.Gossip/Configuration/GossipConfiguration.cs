@@ -1,52 +1,50 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace jac.mp.Gossip.Configuration
+﻿namespace jac.mp.Gossip.Configuration
 {
-    public class GossipConfigurationSection: ConfigurationSection
+    public class GossipConfiguration
     {
-        private const string FailTimeoutPropertyName = "FailTimeout";
-        private const int FailTimeoutDefaultValue = 5;
+        public const int FailTimeoutDefaultValue = 5;
+        public const int RemoveTimeoutDefaultValue = 15;
+        public const int RequestsPerUpdateDefaultValue = 2;
+        public const int RandomSeedDefaultValue = -1;
 
-        private const string RemoveTimeoutPropertyName = "RemoveTimeout";
-        private const int RemoveTimeoutDefaultValue = 15;
-
-        private const string PingsPerIterationPropertyName = "PingsPerIteration";
-        private const int PingsPerIterationDefaultValue = 2;
-
-        private const string RandomSeedPropertyName = "RandomSeed";
-        private const int RandomSeedDefaultValue = -1;
-
-        [ConfigurationProperty(FailTimeoutPropertyName, DefaultValue = FailTimeoutDefaultValue, IsRequired = false, IsKey = false)]
-        public int FailTimeout
+        /// <summary>
+        /// Default configuration.
+        /// </summary>
+        public static GossipConfiguration DefaultConfiguration
         {
-            get { return (int)this[FailTimeoutPropertyName]; }
-            set { this[FailTimeoutPropertyName] = value; }
+            get
+            {
+                return new GossipConfiguration()
+                  {
+                      FailTimeout = FailTimeoutDefaultValue,
+                      RemoveTimeout = RemoveTimeoutDefaultValue,
+                      RequestsPerUpdate = RequestsPerUpdateDefaultValue,
+                      RandomSeed = RandomSeedDefaultValue
+                  };
+            }
         }
 
-        [ConfigurationProperty(RemoveTimeoutPropertyName, DefaultValue = RemoveTimeoutDefaultValue, IsRequired = false, IsKey = false)]
-        public int RemoveTimeout
+        public int FailTimeout { get; set; }
+
+        public int RemoveTimeout { get; set; }
+
+        public int RequestsPerUpdate { get; set; }
+
+        public int RandomSeed { get; set; }
+
+        private GossipConfiguration() { }
+
+        internal GossipConfiguration(GossipConfigurationSection config)
         {
-            get { return (int)this[RemoveTimeoutPropertyName]; }
-            set { this[RemoveTimeoutPropertyName] = value; }
+            FailTimeout = config.FailTimeout;
+            RemoveTimeout = config.RemoveTimeout;
+            RequestsPerUpdate = config.RequestsPerUpdate;
+            RandomSeed = config.RandomSeed;
         }
 
-        [ConfigurationProperty(PingsPerIterationPropertyName, DefaultValue = PingsPerIterationDefaultValue, IsRequired = false, IsKey = false)]
-        public int PingsPerIteration
+        public GossipConfiguration Clone()
         {
-            get { return (int)this[PingsPerIterationPropertyName]; }
-            set { this[PingsPerIterationPropertyName] = value; }
-        }
-
-        [ConfigurationProperty(RandomSeedPropertyName, DefaultValue = RandomSeedDefaultValue, IsRequired = false, IsKey = false)]
-        public int RandomSeed
-        {
-            get { return (int)this[RandomSeedPropertyName]; }
-            set { this[RandomSeedPropertyName] = value; }
+            return MemberwiseClone() as GossipConfiguration;
         }
     }
 }

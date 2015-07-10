@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NSubstitute;
 using System.Collections.Generic;
+using jac.mp.Gossip.Configuration;
 
 namespace jac.mp.Gossip
 {
@@ -13,15 +14,16 @@ namespace jac.mp.Gossip
         public void Update_OnNewNode_NodeJoinedEventRasied()
         {
             // arrange
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
             Uri newNodeUri = new Uri("tcp://127.0.0.3");
             var newNodes = new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(newNodeUri, 5) };
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport.Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>()).Returns(newNodes);
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
             bool called = false;
             strategy.NodeJoined += (o, e) => { called = e.Address == newNodeUri; };
@@ -37,7 +39,7 @@ namespace jac.mp.Gossip
         public void Update_OnNewNode_ReflectedInCollection()
         {
             // arrange
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1"); 
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
             Uri newNodeUri = new Uri("tcp://127.0.0.3");
             var newNodes = new KeyValuePair<Uri, long>[] { 
@@ -46,9 +48,10 @@ namespace jac.mp.Gossip
             };
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport.Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>()).Returns(newNodes);
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
             // act
             strategy.Update();
@@ -62,15 +65,16 @@ namespace jac.mp.Gossip
         {
             // arrange
             int counter = 5;
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport
                 .Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(knownNodeUri, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
             // act
             for (int i = 0; i < 100; i++)
@@ -90,15 +94,16 @@ namespace jac.mp.Gossip
             int counter = 5;
             bool nodeJoinCalled = false;
             bool nodeFailCalled = false;
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport
                 .Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(knownNodeUri, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
             strategy.NodeJoined += (o, e) => { nodeJoinCalled = true; };
             strategy.NodeFailed += (o, e) => { nodeFailCalled = true; };
 
@@ -120,16 +125,17 @@ namespace jac.mp.Gossip
             // arrange
             int counter = 5;
             bool nodeFailCalled = false;
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri nodeOk = new Uri("tcp://127.0.0.2");
             Uri nodeFail = new Uri("tcp://127.0.0.3");
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport
                 .Ping(nodeOk, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(nodeOk, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { nodeOk, nodeFail }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { nodeOk, nodeFail }, transport, GossipConfiguration.DefaultConfiguration);
             strategy.NodeFailed += (o, e) => { nodeFailCalled = true; };
 
             // act
@@ -148,16 +154,17 @@ namespace jac.mp.Gossip
         {
             // arrange
             int counter = 5;
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri nodeOk = new Uri("tcp://127.0.0.2");
             Uri nodeFail = new Uri("tcp://127.0.0.3");
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport
                 .Ping(nodeOk, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(nodeOk, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { nodeOk, nodeFail }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { nodeOk, nodeFail }, transport, GossipConfiguration.DefaultConfiguration);
 
             // act
             for (int i = 0; i < 100; i++)
@@ -174,15 +181,16 @@ namespace jac.mp.Gossip
         public void Update_OnTransportFail_ProtocolNotCrash()
         {
             // arrange
-            Node ownData = new Node(new Uri("tcp://127.0.0.1"));
+            Uri localUri = new Uri("tcp://127.0.0.1");
             Uri knownNode = new Uri("tcp://127.0.0.2");
 
             var transport = Substitute.For<IGossipTransport>();
+            transport.LocalUri.Returns(localUri);
             transport
                 .Ping(knownNode, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => { throw new Exception(); });
 
-            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNode }, transport);
+            IStrategy strategy = new GossipStrategy(new Uri[] { knownNode }, transport, GossipConfiguration.DefaultConfiguration);
             
             // act
             strategy.Update();

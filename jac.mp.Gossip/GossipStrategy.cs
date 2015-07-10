@@ -5,10 +5,11 @@ using System.Threading;
 using log4net;
 using System.Configuration;
 using jac.mp.Gossip.Configuration;
+using System.Diagnostics;
 
 namespace jac.mp.Gossip
 {
-    // todo: onfiguration
+    // todo: onfiguration (who should hold URI - local, remote nodes)
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
@@ -19,22 +20,27 @@ namespace jac.mp.Gossip
     {
         #region Static members.
 
-        static GossipConfigurationSection GetGossipConfiguration()
+        /// <summary>
+        /// Try to get Gossip configuration from application configuration manager.
+        /// </summary>
+        /// <returns>Gossip configuration.</returns>
+        static GossipConfiguration GetGossipConfiguration()
         {
-            return ConfigurationManager.GetSection(ConfigurationSectionName) as GossipConfigurationSection;
+            var config = ConfigurationManager.GetSection(GossipConfigurationSection.ConfigurationSectionName) as GossipConfigurationSection;
+
+            if (config == null)
+                throw new ConfigurationErrorsException(String.Format("Cannot locate configuration section '{0}'", GossipConfigurationSection.ConfigurationSectionName));
+
+            return new GossipConfiguration(config);
         } 
 
         #endregion
 
-        private const string ConfigurationSectionName = "GossipConfiguration";
-
-        private readonly int _numbersOfReceivers;
-        private readonly int _failTimeout;
-        private readonly int _removeTimeout;
+        private readonly GossipConfiguration _configuration;
         private readonly IGossipTransport _transport;
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
         private readonly Random _random;
-        private readonly Node _ownData;
+        private readonly Uri _localUri;
         private readonly ILog _log = null;
         private long _heartbeat;
         private long _timeStamp;
@@ -51,8 +57,8 @@ namespace jac.mp.Gossip
         /// <summary>
         /// Constructor.
         /// </summary>
-        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport)
-            : this(ownData, nodes, transport, GetGossipConfiguration())
+        public GossipStrategy(Uri[] nodes, IGossipTransport transport)
+            : this(nodes, transport, GetGossipConfiguration())
         { }
 
         /// <summary>
@@ -60,7 +66,7 @@ namespace jac.mp.Gossip
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="transport"></param>
-        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport, GossipConfigurationSection configuration)
+        public GossipStrategy(Uri[] nodes, IGossipTransport transport, GossipConfiguration configuration)
         {
             if (transport == null)
                 throw new ArgumentNullException("transport");
@@ -71,16 +77,28 @@ namespace jac.mp.Gossip
             if (configuration == null)
                 throw new ArgumentNullException("configuration");
 
-            _transport = transport;
-            _numbersOfReceivers = configuration.PingsPerIteration;
-            _failTimeout = configuration.FailTimeout;
-            _removeTimeout = configuration.RemoveTimeout;
             _heartbeat = 0;
             _timeStamp = 0;
+
+            _configuration = configuration.Clone();
             _random = configuration.RandomSeed < 0 ? new Random() : new Random(configuration.RandomSeed);
-            _ownData = ownData;
             _log = LogManager.GetLogger(this.GetType());
+
+            _transport = transport;
+            _transport.IncomingPingRequestHandler = OnPingRequest;
             _activeNodes = _membersList.Values.Select(a => a.NodeData);
+
+            // try to get local URI
+            try
+            {
+                _localUri = _transport.LocalUri;
+            }
+            catch(Exception ex)
+            {
+                _log.Error("Failed to retrieve local URI value from transport.", ex);
+
+                throw new Exception("Failed to retrieve local URI value from transport.", ex);
+            }
 
             // setup intial nodes list
             foreach (var n in nodes)
@@ -101,7 +119,7 @@ namespace jac.mp.Gossip
             _timeStamp++;
 
             // ping random nodes
-            int number = _numbersOfReceivers < _membersList.Count ? _numbersOfReceivers : _membersList.Count;
+            int number = _configuration.RequestsPerUpdate < _membersList.Count ? _configuration.RequestsPerUpdate : _membersList.Count;
             for (int i = 0; i < number; i++)
             {
                 var index = _random.Next(number);
@@ -111,14 +129,14 @@ namespace jac.mp.Gossip
             }
 
             // process not responding nodes -> mark as failed
-            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _failTimeout).Select(a => a.Value);
+            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.FailTimeout).Select(a => a.Value);
             foreach (var v in result)
             {
                 v.State = MemberState.Failed;
             }
 
             // process nodes to remove
-            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _removeTimeout).Select(a => a.Value).ToArray();
+            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.RemoveTimeout).Select(a => a.Value).ToArray();
             foreach (var v in result)
             {
                 var node = v.NodeData;
@@ -134,14 +152,15 @@ namespace jac.mp.Gossip
         /// <param name="nodeUri"></param>
         private void Ping(Uri nodeUri)
         {
-            Interlocked.Increment(ref _heartbeat);
+            _log.DebugFormat("{0} pinging node {1}", _localUri, nodeUri);
 
-            var dict = _membersList.Where(a => a.Value.State == MemberState.Ok).ToDictionary(a => a.Key, a => a.Value.Heartbeat);
-            dict.Add(_ownData.Address, _heartbeat);
+            Interlocked.Increment(ref _heartbeat);
 
             try
             {
-                var result = _transport.Ping(nodeUri, dict.ToArray());
+                var dict = GetNodesInformation();
+
+                var result = _transport.Ping(nodeUri, dict);
 
                 UpdateMembers(result);
             }
@@ -154,11 +173,34 @@ namespace jac.mp.Gossip
         /// <summary>
         /// 
         /// </summary>
+        /// <param name="nodesInformation"></param>
+        /// <returns></returns>
+        private KeyValuePair<Uri, long>[] OnPingRequest(KeyValuePair<Uri, long>[] nodesInformation)
+        {
+            if (nodesInformation == null)
+                throw new ArgumentNullException("nodesInformation");
+
+            _log.DebugFormat("{0} received ping", _localUri);
+
+            Interlocked.Increment(ref _heartbeat);
+
+            UpdateMembers(nodesInformation);
+
+            //return GetNodesInformation();
+            return new KeyValuePair<Uri, long>[] { };
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
         /// <param name="result"></param>
         private void UpdateMembers(KeyValuePair<Uri, long>[] result)
         {
             foreach (var kv in result)
             {
+                if (kv.Key == _localUri)
+                    continue;
+
                 if (_membersList.ContainsKey(kv.Key) == false)
                 {
                     AddNewNode(kv.Key, kv.Value);
@@ -195,6 +237,20 @@ namespace jac.mp.Gossip
             _membersList.Add(uri, node);
             
             OnNodeJoined(node.NodeData);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private KeyValuePair<Uri, long>[] GetNodesInformation()
+        {
+            var dict = _membersList.Where(a => a.Value.State == MemberState.Ok).ToDictionary(a => a.Key, a => a.Value.Heartbeat);
+            dict.Add(_localUri, _heartbeat);
+
+            _log.DebugFormat("{0} has {1} members in list", _localUri, dict.Count - 1);
+
+            return dict.ToArray();
         }
 
         /// <summary>
