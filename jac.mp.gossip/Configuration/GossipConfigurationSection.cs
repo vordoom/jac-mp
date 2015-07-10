@@ -14,7 +14,7 @@ namespace jac.mp.Gossip.Configuration
         private const string FailTimeoutPropertyName = "FailTimeout";
         private const string RemoveTimeoutPropertyName = "RemoveTimeout";
         private const string RequestsPerUpdatePropertyName = "RequestsPerUpdate";
-        private const string RandomSeedPropertyName = "RandomSeed";
+        private const string RandomSeedPropertyName = "RandomSeed"; 
 
         [ConfigurationProperty(FailTimeoutPropertyName, DefaultValue = GossipConfiguration.FailTimeoutDefaultValue, IsRequired = false, IsKey = false)]
         public int FailTimeout
