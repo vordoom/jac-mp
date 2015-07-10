@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
+using log4net;
 
 namespace jac.mp.gossip
 {
@@ -18,7 +19,9 @@ namespace jac.mp.gossip
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
         private readonly Random _random;
         private readonly Uri _ownUri;
+        private readonly ILog _log = null;
         private long _heartbeat;
+        private long _timeStamp;
 
         public IEnumerable<Node> Nodes
         {
@@ -60,8 +63,10 @@ namespace jac.mp.gossip
 
             _transport = transport;
             _heartbeat = 0;
+            _timeStamp = 0;
             _random = new Random();
             _ownUri = new Uri("127.0.0.1");
+            _log = LogManager.GetLogger(this.GetType());
 
             foreach (var n in nodes)
             {
@@ -73,7 +78,7 @@ namespace jac.mp.gossip
                     {
                         Heartbeat = 0,
                         State = MemberState.Ok,
-                        Timestamp = DateTime.Now.Ticks
+                        Timestamp = _timeStamp
                     });
             }
         }
@@ -83,6 +88,9 @@ namespace jac.mp.gossip
         /// </summary>
         public void Update()
         {
+            // todo: concurrency
+            _timeStamp++;
+
             // ping random nodes
             int number = NumbersOfReceivers < _membersList.Count ? NumbersOfReceivers : _membersList.Count;
             for (int i = 0; i < number; i++)
@@ -96,17 +104,62 @@ namespace jac.mp.gossip
             // process failed nodes
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="nodeUri"></param>
         private void Ping(Uri nodeUri)
-        {
-            var dict = GetMembersDictionary();
-
-            _transport.Ping(nodeUri, dict.ToArray());
-        }
-
-        private Dictionary<Uri,long> GetMembersDictionary()
         {
             Interlocked.Increment(ref _heartbeat);
 
+            var dict = GetMembersDictionary();
+
+            try
+            {
+                var result = _transport.Ping(nodeUri, dict.ToArray());
+
+                UpdateMembers(result);
+            }
+            catch (Exception ex)
+            {
+                _log.Debug(String.Format("Failed to ping node {0}", nodeUri), ex);
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="result"></param>
+        private void UpdateMembers(KeyValuePair<Uri, long>[] result)
+        {
+            foreach (var kv in result)
+            {
+                if (_membersList.ContainsKey(kv.Key))
+                {
+                    _membersList[kv.Key].Heartbeat = kv.Value;
+                    _membersList[kv.Key].Timestamp = _timeStamp;
+                }
+                else
+                {
+                    _membersList.Add(kv.Key,
+                    new MemberInfo()
+                    {
+                        Heartbeat = kv.Value,
+                        State = MemberState.Ok,
+                        Timestamp = _timeStamp
+                    });
+
+                    OnNodeJoined(kv.Key);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private Dictionary<Uri,long> GetMembersDictionary()
+        {
             var dict = _membersList.ToDictionary(a => a.Key, a => a.Value.Heartbeat);
             dict.Add(_ownUri, _heartbeat);
 
@@ -114,11 +167,10 @@ namespace jac.mp.gossip
         }
 
 
-
         /// <summary>
         /// 
         /// </summary>
-        private void OnNodeJoined()
+        private void OnNodeJoined(Uri uri)
         {
             NodeJoined.Raise(this, null);
         }
