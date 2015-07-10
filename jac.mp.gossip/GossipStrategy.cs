@@ -10,6 +10,7 @@ namespace jac.mp.gossip
     // todo: prevent duplicate pings
     // todo: concurentDictionary
     // todo: check other multythreading issues
+    // todo: should not be 'blackout' situation, when all nodes removed (no-one to ping)
 
     public class GossipStrategy : IStrategy
     {
@@ -104,7 +105,7 @@ namespace jac.mp.gossip
             }
 
             // process nodes to remove
-            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - RemoveTimeout).Select(a => a.Value);
+            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - RemoveTimeout).Select(a => a.Value).ToArray();
             foreach (var v in result)
             {
                 var node = v.NodeData;
