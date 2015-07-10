@@ -73,14 +73,7 @@ namespace jac.mp.gossip
                 if (n == null)
                     throw new ArgumentException("Uri must not be null.");
 
-                _membersList.Add(n, 
-                    new MemberInfo()
-                    {
-                        Heartbeat = 0,
-                        State = MemberState.Ok,
-                        Timestamp = _timeStamp,
-                        NodeData = new Node(n)
-                    });
+                AddNewNode(n, 0);
             }
         }
 
@@ -142,19 +135,29 @@ namespace jac.mp.gossip
                 }
                 else
                 {
-                    var node = new MemberInfo()
-                    {
-                        Heartbeat = kv.Value,
-                        State = MemberState.Ok,
-                        Timestamp = _timeStamp,
-                        NodeData = new Node(kv.Key)
-                    };
-
-                    _membersList.Add(kv.Key, node);
-
-                    OnNodeJoined(node.NodeData);
+                    AddNewNode(kv.Key, kv.Value);
                 }
             }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="uri"></param>
+        /// <param name="heartbeat"></param>
+        private void AddNewNode(Uri uri, long heartbeat)
+        {
+            var node = new MemberInfo()
+            {
+                Heartbeat = heartbeat,
+                State = MemberState.Ok,
+                Timestamp = _timeStamp,
+                NodeData = new Node(uri)
+            };
+
+            _membersList.Add(uri, node);
+            
+            OnNodeJoined(node.NodeData);
         }
 
         /// <summary>
