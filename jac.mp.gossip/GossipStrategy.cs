@@ -1,16 +1,24 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Threading;
 
 namespace jac.mp.gossip
 {
+    // todo: push, pull, push/pull mechanism
+    // todo: prevent duplicate pings
+    // todo: concurentDictionary
+    // todo: check other multythreading issues
+
     public class GossipStrategy : IStrategy
     {
+        private const int NumbersOfReceivers = 2;
+
         private readonly IGossipTransport _transport;
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
-        private ulong _heartbeat;
+        private readonly Random _random;
+        private readonly Uri _ownUri;
+        private long _heartbeat;
 
         public IEnumerable<Node> Nodes
         {
@@ -52,6 +60,8 @@ namespace jac.mp.gossip
 
             _transport = transport;
             _heartbeat = 0;
+            _random = new Random();
+            _ownUri = new Uri("127.0.0.1");
 
             foreach (var n in nodes)
             {
@@ -73,15 +83,44 @@ namespace jac.mp.gossip
         /// </summary>
         public void Update()
         {
-            throw new NotImplementedException();
+            // ping random nodes
+            int number = NumbersOfReceivers < _membersList.Count ? NumbersOfReceivers : _membersList.Count;
+            for (int i = 0; i < number; i++)
+            {
+                var index = _random.Next(number);
+                var nodeUri = _membersList.Keys.ElementAt(index);
+
+                Ping(nodeUri);
+            }
+
+            // process failed nodes
         }
+
+        private void Ping(Uri nodeUri)
+        {
+            var dict = GetMembersDictionary();
+
+            _transport.Ping(nodeUri, dict.ToArray());
+        }
+
+        private Dictionary<Uri,long> GetMembersDictionary()
+        {
+            Interlocked.Increment(ref _heartbeat);
+
+            var dict = _membersList.ToDictionary(a => a.Key, a => a.Value.Heartbeat);
+            dict.Add(_ownUri, _heartbeat);
+
+            return dict;
+        }
+
+
 
         /// <summary>
         /// 
         /// </summary>
         private void OnNodeJoined()
         {
-            NodeJoined(this, null);
+            NodeJoined.Raise(this, null);
         }
 
         /// <summary>
@@ -89,7 +128,7 @@ namespace jac.mp.gossip
         /// </summary>
         private void OnNodeFailed()
         {
-            NodeFailed(this, null);
+            NodeFailed.Raise(this, null);
         }
     }
 

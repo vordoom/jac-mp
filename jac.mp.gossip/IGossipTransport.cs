@@ -8,5 +8,6 @@ namespace jac.mp
 {
     public interface IGossipTransport
     {
+        KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] keyValuePair);
     }
 }
