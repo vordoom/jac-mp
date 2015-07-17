@@ -7,8 +7,8 @@
     <ProjectGuid>{137D77C8-5C1F-41A2-AFC0-9A57C97DC8E0}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>jac.mp</RootNamespace>
-    <AssemblyName>jac.mp.gossip</AssemblyName>
+    <RootNamespace>jac.mp.Gossip</RootNamespace>
+    <AssemblyName>jac.mp.Gossip</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -34,6 +34,7 @@
       <HintPath>..\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -42,6 +43,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Configuration\GossipConfiguration.cs" />
     <Compile Include="GossipStrategy.cs" />
     <Compile Include="IGossipTransport.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

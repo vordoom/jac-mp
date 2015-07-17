@@ -4,7 +4,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NSubstitute;
 using System.Collections.Generic;
 
-namespace jac.mp.gossip
+namespace jac.mp.Gossip
 {
     [TestClass]
     public class GossipStrategyTest
@@ -21,7 +21,7 @@ namespace jac.mp.gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>()).Returns(newNodes);
 
-            IStrategy strategy = new GossipStrategy(ownData, knownNodeUri, transport);
+            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
 
             bool called = false;
             strategy.NodeJoined += (o, e) => { called = e.Address == newNodeUri; };
@@ -48,7 +48,7 @@ namespace jac.mp.gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>()).Returns(newNodes);
 
-            IStrategy strategy = new GossipStrategy(ownData, knownNodeUri, transport);
+            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
 
             // act
             strategy.Update();
@@ -70,7 +70,7 @@ namespace jac.mp.gossip
                 .Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(knownNodeUri, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, knownNodeUri, transport);
+            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
 
             // act
             for (int i = 0; i < 100; i++)
@@ -98,7 +98,7 @@ namespace jac.mp.gossip
                 .Ping(knownNodeUri, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => new KeyValuePair<Uri, long>[] { new KeyValuePair<Uri, long>(knownNodeUri, counter) });
 
-            IStrategy strategy = new GossipStrategy(ownData, knownNodeUri, transport);
+            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNodeUri }, transport);
             strategy.NodeJoined += (o, e) => { nodeJoinCalled = true; };
             strategy.NodeFailed += (o, e) => { nodeFailCalled = true; };
 
@@ -182,7 +182,7 @@ namespace jac.mp.gossip
                 .Ping(knownNode, Arg.Any<KeyValuePair<Uri, long>[]>())
                 .Returns(a => { throw new Exception(); });
 
-            IStrategy strategy = new GossipStrategy(ownData, knownNode, transport);
+            IStrategy strategy = new GossipStrategy(ownData, new Uri[] { knownNode }, transport);
             
             // act
             strategy.Update();

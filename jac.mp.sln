@@ -1,17 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 14
+VisualStudioVersion = 14.0.22823.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp", "jac.mp\jac.mp.csproj", "{177830C2-4AF9-48E1-A2FA-6196DF3516F7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.gossip", "jac.mp.gossip\jac.mp.gossip.csproj", "{137D77C8-5C1F-41A2-AFC0-9A57C97DC8E0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.Gossip_", "jac.mp.gossip\jac.mp.Gossip_.csproj", "{137D77C8-5C1F-41A2-AFC0-9A57C97DC8E0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.all-to-all", "jac.mp.all-to-all\jac.mp.all-to-all.csproj", "{80831518-657C-4C6F-936D-0A74871F3048}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.AllToAll", "jac.mp.all-to-all\jac.mp.AllToAll.csproj", "{80831518-657C-4C6F-936D-0A74871F3048}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.gossip.tests", "jac.mp.gossip.tests\jac.mp.gossip.tests.csproj", "{E3853CA1-0B5A-4606-9DEC-E99346CCDCAA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.Gossip.Tests_", "jac.mp.gossip.tests\jac.mp.Gossip.Tests_.csproj", "{E3853CA1-0B5A-4606-9DEC-E99346CCDCAA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.emulation", "jac.mp.emulation\jac.mp.emulation.csproj", "{3CAC67BE-5C17-4461-AC01-6ABAD5710012}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jac.mp.Emulation_", "jac.mp.emulation\jac.mp.Emulation_.csproj", "{3CAC67BE-5C17-4461-AC01-6ABAD5710012}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -6,8 +6,8 @@
     <ProjectGuid>{E3853CA1-0B5A-4606-9DEC-E99346CCDCAA}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>jac.mp.gossip</RootNamespace>
-    <AssemblyName>jac.mp.gossip.tests</AssemblyName>
+    <RootNamespace>jac.mp.Gossip</RootNamespace>
+    <AssemblyName>jac.mp.Gossip.Tests</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{3AC096D0-A1C2-E12C-1390-A8335801FDAB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -57,9 +57,9 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\jac.mp.gossip\jac.mp.gossip.csproj">
+    <ProjectReference Include="..\jac.mp.gossip\jac.mp.Gossip_.csproj">
       <Project>{137d77c8-5c1f-41a2-afc0-9a57c97dc8e0}</Project>
-      <Name>jac.mp.gossip</Name>
+      <Name>jac.mp.Gossip_</Name>
     </ProjectReference>
     <ProjectReference Include="..\jac.mp\jac.mp.csproj">
       <Project>{177830c2-4af9-48e1-a2fa-6196df3516f7}</Project>

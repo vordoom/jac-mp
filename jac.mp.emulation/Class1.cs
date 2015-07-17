@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace jac.mp.emulation
+namespace jac.mp.Emulation
 {
     public class Class1
     {

@@ -3,9 +3,12 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using log4net;
+using System.Configuration;
+using jac.mp.Gossip.Configuration;
 
-namespace jac.mp.gossip
+namespace jac.mp.Gossip
 {
+    // todo: onfiguration
     // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
@@ -14,10 +17,20 @@ namespace jac.mp.gossip
 
     public class GossipStrategy : IStrategy
     {
-        private const int NumbersOfReceivers = 2;
-        private const int FailTimeout = 5;
-        private const int RemoveTimeout = 15;
+        #region Static members.
 
+        static GossipConfigurationSection GetGossipConfiguration()
+        {
+            return ConfigurationManager.GetSection(ConfigurationSectionName) as GossipConfigurationSection;
+        } 
+
+        #endregion
+
+        private const string ConfigurationSectionName = "GossipConfiguration";
+
+        private readonly int _numbersOfReceivers;
+        private readonly int _failTimeout;
+        private readonly int _removeTimeout;
         private readonly IGossipTransport _transport;
         private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
         private readonly Random _random;
@@ -38,15 +51,8 @@ namespace jac.mp.gossip
         /// <summary>
         /// Constructor.
         /// </summary>
-        public GossipStrategy() { }
-
-        /// <summary>
-        /// Constructor.
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="transport"></param>
-        public GossipStrategy(Node ownData, Uri node, IGossipTransport transport) 
-            : this(ownData, new Uri[] { node }, transport)
+        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport)
+            : this(ownData, nodes, transport, GetGossipConfiguration())
         { }
 
         /// <summary>
@@ -54,7 +60,7 @@ namespace jac.mp.gossip
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="transport"></param>
-        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport)
+        public GossipStrategy(Node ownData, Uri[] nodes, IGossipTransport transport, GossipConfigurationSection configuration)
         {
             if (transport == null)
                 throw new ArgumentNullException("transport");
@@ -62,14 +68,21 @@ namespace jac.mp.gossip
             if (nodes == null)
                 throw new ArgumentNullException("nodes");
 
+            if (configuration == null)
+                throw new ArgumentNullException("configuration");
+
             _transport = transport;
+            _numbersOfReceivers = configuration.PingsPerIteration;
+            _failTimeout = configuration.FailTimeout;
+            _removeTimeout = configuration.RemoveTimeout;
             _heartbeat = 0;
             _timeStamp = 0;
-            _random = new Random();
+            _random = configuration.RandomSeed < 0 ? new Random() : new Random(configuration.RandomSeed);
             _ownData = ownData;
             _log = LogManager.GetLogger(this.GetType());
             _activeNodes = _membersList.Values.Select(a => a.NodeData);
 
+            // setup intial nodes list
             foreach (var n in nodes)
             {
                 if (n == null)
@@ -88,7 +101,7 @@ namespace jac.mp.gossip
             _timeStamp++;
 
             // ping random nodes
-            int number = NumbersOfReceivers < _membersList.Count ? NumbersOfReceivers : _membersList.Count;
+            int number = _numbersOfReceivers < _membersList.Count ? _numbersOfReceivers : _membersList.Count;
             for (int i = 0; i < number; i++)
             {
                 var index = _random.Next(number);
@@ -98,14 +111,14 @@ namespace jac.mp.gossip
             }
 
             // process not responding nodes -> mark as failed
-            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - FailTimeout).Select(a => a.Value);
+            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _failTimeout).Select(a => a.Value);
             foreach (var v in result)
             {
                 v.State = MemberState.Failed;
             }
 
             // process nodes to remove
-            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - RemoveTimeout).Select(a => a.Value).ToArray();
+            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _removeTimeout).Select(a => a.Value).ToArray();
             foreach (var v in result)
             {
                 var node = v.NodeData;
