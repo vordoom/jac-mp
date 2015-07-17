@@ -57,7 +57,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\jac.mp.Gossip_\jac.mp.Gossip.csproj">
+    <ProjectReference Include="..\jac.mp.Gossip\jac.mp.Gossip.csproj">
       <Project>{137d77c8-5c1f-41a2-afc0-9a57c97dc8e0}</Project>
       <Name>jac.mp.Gossip</Name>
     </ProjectReference>
