@@ -11,7 +11,7 @@ namespace jac.mp.Gossip
     public interface IGossipTransport
     {
         Uri LocalUri { get; }
-        PingRequestHandler IncomingPingRequestHandler { get; set; }
+        PingRequestHandler IncomingPingCallback { get; set; }
 
         KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] nodesInformation);
     }
