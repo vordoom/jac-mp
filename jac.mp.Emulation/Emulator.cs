@@ -21,7 +21,7 @@ namespace jac.mp.Emulation
 
         private const int randomSeed = 10;
         private int numOfIterations = 100;
-        private int numOfNodes = 10;
+        private int numOfNodes = 500;
         private int numOfFailedNodes = 1;
         private double networkFailureProbability = 0;
         private Random random = new Random(randomSeed);
@@ -83,13 +83,7 @@ namespace jac.mp.Emulation
 
         void s_NodeJoined(object sender, Node e)
         {
-        //    var s = sender as IStrategy;
-        //    var uri = strategies.Where(a => a.Value == s).First().Key;
 
-        //    bool all = nodes.Where(a => a != uri).All(a => s.Nodes.Any(b => b.Address == a));
-
-        //    if (all)
-        //        Debug.WriteLine("{0} has all nodes", uri);
         }
 
         static void Main()
