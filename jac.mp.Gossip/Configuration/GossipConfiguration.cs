@@ -6,6 +6,7 @@
         public const int RemoveTimeoutDefaultValue = 15;
         public const int RequestsPerUpdateDefaultValue = 2;
         public const int RandomSeedDefaultValue = -1;
+        public const InformationExchangePattern InformationExchangePatternDefaultValue = InformationExchangePattern.PushPull;
 
         /// <summary>
         /// Default configuration.
@@ -15,12 +16,13 @@
             get
             {
                 return new GossipConfiguration()
-                  {
-                      FailTimeout = FailTimeoutDefaultValue,
-                      RemoveTimeout = RemoveTimeoutDefaultValue,
-                      RequestsPerUpdate = RequestsPerUpdateDefaultValue,
-                      RandomSeed = RandomSeedDefaultValue
-                  };
+                {
+                    FailTimeout = FailTimeoutDefaultValue,
+                    RemoveTimeout = RemoveTimeoutDefaultValue,
+                    RequestsPerUpdate = RequestsPerUpdateDefaultValue,
+                    InformationExchangePattern = InformationExchangePatternDefaultValue,
+                    RandomSeed = RandomSeedDefaultValue
+                };
             }
         }
 
@@ -29,6 +31,8 @@
         public int RemoveTimeout { get; set; }
 
         public int RequestsPerUpdate { get; set; }
+
+        public InformationExchangePattern InformationExchangePattern { get; set; }
 
         public int RandomSeed { get; set; }
 

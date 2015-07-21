@@ -20,7 +20,7 @@ namespace jac.mp.Emulation
 
         //nodes.Where(a=>a.Address != nodes[i].Address).OrderBy(a => random.Next()).Select(a=> a.Address).ToArray(), 
 
-        private const int randomSeed = 110;
+        private const int randomSeed = 11;
         private int numOfIterations = 100;
         private int numOfNodes = 100;
         private int numOfFailedNodes = 1;
@@ -44,8 +44,9 @@ namespace jac.mp.Emulation
 
             var config = GossipConfiguration.DefaultConfiguration;
             config.RequestsPerUpdate = 1;
+            config.InformationExchangePattern = InformationExchangePattern.PushPull;
 
-            for (int i = 0; i < numOfNodes; i++ )
+            for (int i = 0; i < numOfNodes; i++)
             {
                 var transport = new GossipEmulatorTransport(nodes[i], transports);
                 config.RandomSeed = randomSeed + i;
@@ -60,7 +61,7 @@ namespace jac.mp.Emulation
                 strat.NodeFailed += s_NodeFailed;
 
                 transports.Add(nodes[i], transport);
-                strategies.Add(nodes[i], strat);  
+                strategies.Add(nodes[i], strat);
             }
         }
 
@@ -78,13 +79,13 @@ namespace jac.mp.Emulation
                     var n = strategies.Count - 1;
                     if (nodesCounter == n * n)
                     {
-                var r = strategies.All(
-                    x => nodes
-                        .Where(a => a != x.Key)
-                        .All(a => x.Value.Nodes.Any(b => b.Address == a))
-                );
+                        var r = strategies.All(
+                            x => nodes
+                                .Where(a => a != x.Key)
+                                .All(a => x.Value.Nodes.Any(b => b.Address == a))
+                        );
 
-                if (r == true)
+                        if (r == true)
                         {
                             _log.DebugFormat("All nodes reported full membership list on iteration '{0}'", i);
                             resolve = false;
@@ -100,7 +101,7 @@ namespace jac.mp.Emulation
 
                     if (nodesCounter == n * (strategies.Count - 1))
                     {
-                        var r = strategies.Where(a => transports.Where(b=>b.Value.Fail).Select(b=>b.Key).Contains(a.Key) == false).All(
+                        var r = strategies.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a.Key) == false).All(
                             x => nodes.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a) == false)
                                 .Where(a => a != x.Key)
                                 .All(a => x.Value.Nodes.Any(b => b.Address == a))
@@ -111,8 +112,8 @@ namespace jac.mp.Emulation
                             _log.DebugFormat("All nodes detected failed one at iteration '{0}'", i);
 
                             break;
-            }
-        }
+                        }
+                    }
                 }
             }
         }
@@ -151,14 +152,14 @@ namespace jac.mp.Emulation
             _transports = transports;
         }
 
-        public KeyValuePair<Uri, long>[] Ping(Uri nodeUri, KeyValuePair<Uri, long>[] nodesInformation)
+        public NodeInformation[] Ping(Uri targetUri, NodeInformation localInformation, NodeInformation[] membersInformation)
         {
             if (Fail)
                 throw new Exception("Emulator network exception");
 
-            var transport = _transports[nodeUri] as GossipEmulatorTransport;
+            var transport = _transports[targetUri] as GossipEmulatorTransport;
 
-            return transport.IncomingPingCallback(nodesInformation);
+            return transport.IncomingPingCallback(localInformation, membersInformation);
         }
 
         public bool Fail { get; set; }

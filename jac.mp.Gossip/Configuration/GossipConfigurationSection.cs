@@ -14,6 +14,7 @@ namespace jac.mp.Gossip.Configuration
         private const string FailTimeoutPropertyName = "FailTimeout";
         private const string RemoveTimeoutPropertyName = "RemoveTimeout";
         private const string RequestsPerUpdatePropertyName = "RequestsPerUpdate";
+        private const string InformationExchangePatternPropertyName = "InformationExchangePattern";
         private const string RandomSeedPropertyName = "RandomSeed"; 
 
         [ConfigurationProperty(FailTimeoutPropertyName, DefaultValue = GossipConfiguration.FailTimeoutDefaultValue, IsRequired = false, IsKey = false)]
@@ -35,6 +36,13 @@ namespace jac.mp.Gossip.Configuration
         {
             get { return (int)this[RequestsPerUpdatePropertyName]; }
             set { this[RequestsPerUpdatePropertyName] = value; }
+        }
+
+        [ConfigurationProperty(InformationExchangePatternPropertyName, DefaultValue = GossipConfiguration.InformationExchangePatternDefaultValue, IsRequired = false, IsKey = false)]
+        public InformationExchangePattern InformationExchangePattern
+        {
+            get { return (InformationExchangePattern)this[InformationExchangePatternPropertyName]; }
+            set { this[InformationExchangePatternPropertyName] = value; }
         }
 
         [ConfigurationProperty(RandomSeedPropertyName, DefaultValue = GossipConfiguration.RandomSeedDefaultValue, IsRequired = false, IsKey = false)]

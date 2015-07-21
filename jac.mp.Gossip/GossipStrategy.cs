@@ -10,7 +10,6 @@ using System.Diagnostics;
 namespace jac.mp.Gossip
 {
     // todo: onfiguration (who should hold URI - local, remote nodes)
-    // todo: push, pull, push/pull mechanism
     // todo: prevent duplicate pings
     // todo: concurentDictionary
     // todo: check other multythreading issues (client read Nodes / gossip updates members -> exception)
@@ -118,6 +117,8 @@ namespace jac.mp.Gossip
             // todo: concurrency
             _timeStamp++;
 
+            var localInformation = new NodeInformation() { Address = _localUri, Hearbeat = _heartbeat };
+
             // ping random nodes
             int number = _configuration.RequestsPerUpdate < _membersList.Count ? _configuration.RequestsPerUpdate : _membersList.Count;
             for (int i = 0; i < number; i++)
@@ -125,7 +126,7 @@ namespace jac.mp.Gossip
                 var index = _random.Next(_membersList.Count);
                 var nodeUri = _membersList.Keys.ElementAt(index);
 
-                Ping(nodeUri);
+                Ping(nodeUri, localInformation);
             }
 
             // process not responding nodes -> mark as failed
@@ -150,25 +151,36 @@ namespace jac.mp.Gossip
         /// 
         /// </summary>
         /// <param name="nodeUri"></param>
-        private void Ping(Uri nodeUri)
+        private void Ping(Uri nodeUri, NodeInformation localInformation)
         {
-            _log.DebugFormat("{0} pinging node {1}", _localUri, nodeUri);
+            _log.DebugFormat("{0} \t sending ping request to {1}", _localUri, nodeUri);
 
             Interlocked.Increment(ref _heartbeat);
 
             try
             {
-                var dict = GetNodesInformation();
+                NodeInformation[] membersInformation = null;
 
-                var result = _transport.Ping(nodeUri, dict);
+                // send members information only if exchange pattern is NOT Pull
+                if (_configuration.InformationExchangePattern != InformationExchangePattern.Pull)
+                    membersInformation = GetNodesInformation();
+                else
+                    membersInformation = new NodeInformation[0];
 
-                _membersList[nodeUri].Timestamp = _timeStamp;
+                var result = _transport.Ping(nodeUri, localInformation, membersInformation);
 
-                UpdateMembers(result);
+                if (result == null)
+                    throw new Exception(string.Format("Ping of node '{0}' returned null result.", nodeUri));
+
+                // update only current node if no information provided
+                if (result.Length == 0)
+                    _membersList[nodeUri].Timestamp = _timeStamp;
+                else
+                    UpdateMembers(result);
             }
             catch (Exception ex)
             {
-                _log.Debug(String.Format("Failed to ping node {0}", nodeUri), ex);
+                _log.Debug(string.Format("Failed to ping node {0}", nodeUri), ex);
             }
         }
 
@@ -177,46 +189,64 @@ namespace jac.mp.Gossip
         /// </summary>
         /// <param name="nodesInformation"></param>
         /// <returns></returns>
-        private KeyValuePair<Uri, long>[] OnPingRequest(KeyValuePair<Uri, long>[] nodesInformation)
+        private NodeInformation[] OnPingRequest(NodeInformation senderInformation, NodeInformation[] membersInformation)
         {
-            if (nodesInformation == null)
+            if (senderInformation == null)
+                throw new ArgumentNullException("senderInformation");
+
+            if (membersInformation == null)
                 throw new ArgumentNullException("nodesInformation");
 
-            _log.DebugFormat("{0} received ping", _localUri);
+            _log.DebugFormat("{0} \t received ping request from {1}", _localUri, senderInformation.Address);
 
             Interlocked.Increment(ref _heartbeat);
 
-            UpdateMembers(nodesInformation);
+            // update sender related information
+            UpdateMember(senderInformation);
 
-            //return GetNodesInformation();
-            return new KeyValuePair<Uri, long>[] { };
+            // update members if available
+            if (membersInformation.Length > 0)
+                UpdateMembers(membersInformation);
+
+            // send members information only if exchange pattern is NOT Push
+            if (_configuration.InformationExchangePattern != InformationExchangePattern.Push)
+                return GetNodesInformation();
+            else
+                return new NodeInformation[0];
         }
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="result"></param>
-        private void UpdateMembers(KeyValuePair<Uri, long>[] result)
+        private void UpdateMembers(NodeInformation[] nodesInformation)
         {
-            foreach (var kv in result)
+            foreach (var n in nodesInformation)
+                UpdateMember(n);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="nodeInformation"></param>
+        private void UpdateMember(NodeInformation nodeInformation)
+        {
+            if (nodeInformation.Address == _localUri)
+                return;
+
+            if (_membersList.ContainsKey(nodeInformation.Address) == false)
             {
-                if (kv.Key == _localUri)
-                    continue;
+                AddNewNode(nodeInformation.Address, nodeInformation.Hearbeat);
+            }
+            else
+            {
+                var node = _membersList[nodeInformation.Address];
 
-                if (_membersList.ContainsKey(kv.Key) == false)
+                if (node.Heartbeat < nodeInformation.Hearbeat)
                 {
-                    AddNewNode(kv.Key, kv.Value);
-                }
-                else
-                {
-                    var node = _membersList[kv.Key];
-
-                    if (node.Heartbeat < kv.Value)
-                    {
-                        node.Heartbeat = kv.Value;
-                        node.Timestamp = _timeStamp;
-                        node.State = MemberState.Ok;
-                    }
+                    node.Heartbeat = nodeInformation.Hearbeat;
+                    node.Timestamp = _timeStamp;
+                    node.State = MemberState.Ok;
                 }
             }
         }
@@ -245,14 +275,9 @@ namespace jac.mp.Gossip
         /// 
         /// </summary>
         /// <returns></returns>
-        private KeyValuePair<Uri, long>[] GetNodesInformation()
+        private NodeInformation[] GetNodesInformation()
         {
-            var dict = _membersList.Where(a => a.Value.State == MemberState.Ok).ToDictionary(a => a.Key, a => a.Value.Heartbeat);
-            dict.Add(_localUri, _heartbeat);
-
-            _log.DebugFormat("{0} has {1} members in list", _localUri, dict.Count - 1);
-
-            return dict.ToArray();
+            return _membersList.Where(a => a.Value.State == MemberState.Ok).Select(a=> new NodeInformation() { Address = a.Key, Hearbeat = a.Value.Heartbeat }).ToArray();
         }
 
         /// <summary>
