@@ -23,11 +23,12 @@ namespace jac.mp.Emulation
         private const int randomSeed = 11;
         private int numOfIterations = 100;
         private int numOfNodes = 100;
-        private int numOfFailedNodes = 1;
+        private int numOfFailedNodes = 2;
         private double networkFailureProbability = 0;
         private Random random = new Random(randomSeed);
         private Dictionary<Uri, IEmulatorTransport> transports = new Dictionary<Uri, IEmulatorTransport>();
         private List<Uri> nodes = new List<Uri>();
+        private List<Uri> failedNodes = new List<Uri>();
         private Dictionary<Uri, IStrategy> strategies = new Dictionary<Uri, IStrategy>();
         private ILog _log;
         private int nodesCounter;
@@ -72,12 +73,18 @@ namespace jac.mp.Emulation
             for (int i = 0; i < numOfIterations; i++)
             {
                 foreach (var v in strategies.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a.Key) == false).OrderBy(a => random.Next()))
+                {
+                    if (failedNodes.Contains(v.Key))
+                        continue;
+
                     v.Value.Update();
+                }
 
                 if (resolve)
                 {
-                    var n = strategies.Count - 1;
-                    if (nodesCounter == n * n)
+                    var sum = strategies.Where(a => failedNodes.Contains(a.Key) == false).Sum(a => a.Value.Nodes.Count());
+                    
+                    if (sum == strategies.Count * (strategies.Count - 1))
                     {
                         var r = strategies.All(
                             x => nodes
@@ -90,16 +97,20 @@ namespace jac.mp.Emulation
                             _log.DebugFormat("All nodes reported full membership list on iteration '{0}'", i);
                             resolve = false;
 
-                            var v = random.Next(strategies.Count);
-                            transports.ElementAt(v).Value.Fail = true;
+                            failedNodes = strategies.Keys.OrderBy(x => random.Next()).Take(numOfFailedNodes).ToList();
+                            foreach (var v in failedNodes)
+                            {
+                                _log.DebugFormat("Node '{0}' is failed", v);
+                                transports[v].Fail = true;
+                            }
                         }
                     }
                 }
                 else
                 {
-                    var n = strategies.Count - 1 - numOfFailedNodes;
+                    var sum = strategies.Where(a => failedNodes.Contains(a.Key) == false).Sum(a => a.Value.Nodes.Count());
 
-                    if (nodesCounter == n * (strategies.Count - 1))
+                    if (sum == (strategies.Count - numOfFailedNodes) * (strategies.Count - numOfFailedNodes - 1))
                     {
                         var r = strategies.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a.Key) == false).All(
                             x => nodes.Where(a => transports.Where(b => b.Value.Fail).Select(b => b.Key).Contains(a) == false)
