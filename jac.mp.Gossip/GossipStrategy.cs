@@ -9,8 +9,12 @@ using System.Diagnostics;
 
 namespace jac.mp.Gossip
 {
+    // todo: emulator should be well-designed
+    // todo: collect performance metrics 
+    // todo: implement WCF transport
+    // todo: simple console application
+
     // todo: onfiguration (who should hold URI - local, remote nodes)
-    // todo: prevent duplicate pings
     // todo: concurentDictionary
     // todo: check other multythreading issues (client read Nodes / gossip updates members -> exception)
     // todo: should not be 'blackout' situation, when all nodes removed (no-one to ping)
@@ -85,7 +89,7 @@ namespace jac.mp.Gossip
 
             _transport = transport;
             _transport.IncomingPingCallback = OnPingRequest;
-            _activeNodes = _membersList.Values.Select(a => a.NodeData);
+            _activeNodes = _membersList.Values.Where(a=>a.State == MemberState.Ok).Select(a => a.NodeData);
 
             // try to get local URI
             try
@@ -121,12 +125,11 @@ namespace jac.mp.Gossip
 
             // ping random nodes
             int number = _configuration.RequestsPerUpdate < _membersList.Count ? _configuration.RequestsPerUpdate : _membersList.Count;
-            for (int i = 0; i < number; i++)
-            {
-                var index = _random.Next(_membersList.Count);
-                var nodeUri = _membersList.Keys.ElementAt(index);
+            var pingNodes = _membersList.Keys.OrderBy(x => _random.Next()).Take(number);
 
-                Ping(nodeUri, localInformation);
+            foreach(var uri in pingNodes)
+            {
+                Ping(uri, localInformation);
             }
 
             // process not responding nodes -> mark as failed
@@ -134,6 +137,8 @@ namespace jac.mp.Gossip
             foreach (var v in result)
             {
                 v.State = MemberState.Failed;
+
+                OnNodeFailed(v.NodeData);
             }
 
             // process nodes to remove
@@ -142,8 +147,6 @@ namespace jac.mp.Gossip
             {
                 var node = v.NodeData;
                 _membersList.Remove(node.Address);
-
-                OnNodeFailed(node);
             }
         }
 
@@ -246,7 +249,12 @@ namespace jac.mp.Gossip
                 {
                     node.Heartbeat = nodeInformation.Hearbeat;
                     node.Timestamp = _timeStamp;
-                    node.State = MemberState.Ok;
+
+                    if (node.State != MemberState.Ok)
+                    {
+                        node.State = MemberState.Ok;
+                        OnNodeJoined(node.NodeData);
+                    }
                 }
             }
         }

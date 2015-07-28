@@ -10,28 +10,28 @@ using System.Threading.Tasks;
 
 namespace jac.mp.Emulation
 {
-    public class Emulator
+    public class Emulator: IEmulationEnvironment
     {
-        // num of nodes
-        // failure probability
-        // num of failed nodes
-        // num of iterations
-
-
-        //nodes.Where(a=>a.Address != nodes[i].Address).OrderBy(a => random.Next()).Select(a=> a.Address).ToArray(), 
-
         private const int randomSeed = 11;
-        private int numOfIterations = 100;
-        private int numOfNodes = 100;
-        private int numOfFailedNodes = 2;
-        private double networkFailureProbability = 0;
+        private const int requestsPerUpdate = 2;
+        private const InformationExchangePattern informationExchangePattern = InformationExchangePattern.PushPull;
+        private const int numOfIterations = 100;
+        private const int numOfNodes = 100;
+        private const int numOfFailedNodes = 1;
+        private const double networkFailureProbability = 0;
+
         private Random random = new Random(randomSeed);
-        private Dictionary<Uri, IEmulatorTransport> transports = new Dictionary<Uri, IEmulatorTransport>();
+        private Dictionary<Uri, IEmulationTransport> transports = new Dictionary<Uri, IEmulationTransport>();
         private List<Uri> nodes = new List<Uri>();
         private List<Uri> failedNodes = new List<Uri>();
         private Dictionary<Uri, IStrategy> strategies = new Dictionary<Uri, IStrategy>();
         private ILog _log;
         private int nodesCounter;
+
+        public Dictionary<Uri, IEmulationTransport> Transports
+        {
+            get { return transports; }
+        }
 
         Emulator()
         {
@@ -44,12 +44,12 @@ namespace jac.mp.Emulation
             nodes = list.OrderBy(a => random.Next()).ToList();
 
             var config = GossipConfiguration.DefaultConfiguration;
-            config.RequestsPerUpdate = 1;
-            config.InformationExchangePattern = InformationExchangePattern.PushPull;
+            config.RequestsPerUpdate = requestsPerUpdate;
+            config.InformationExchangePattern = informationExchangePattern;
 
             for (int i = 0; i < numOfNodes; i++)
             {
-                var transport = new GossipEmulatorTransport(nodes[i], transports);
+                var transport = new GossipEmulatorTransport(nodes[i], this);
                 config.RandomSeed = randomSeed + i;
 
                 GossipStrategy strat = null;
@@ -144,11 +144,16 @@ namespace jac.mp.Emulation
             var r = new Emulator();
             r.Start();
         }
+
+        public bool RandomFailure()
+        {
+            return random.Next(100) < networkFailureProbability;
+        }
     }
 
-    public class GossipEmulatorTransport : IGossipTransport, IEmulatorTransport
+    public class GossipEmulatorTransport : IGossipTransport, IEmulationTransport
     {
-        Dictionary<Uri, IEmulatorTransport> _transports;
+        IEmulationEnvironment _env;
         PingRequestHandler _pingRequestHandler = null;
 
         public Uri LocalUri
@@ -157,18 +162,21 @@ namespace jac.mp.Emulation
             private set;
         }
 
-        public GossipEmulatorTransport(Uri localUri, Dictionary<Uri, IEmulatorTransport> transports)
+        public GossipEmulatorTransport(Uri localUri, IEmulationEnvironment env)
         {
             LocalUri = localUri;
-            _transports = transports;
+            _env = env;
         }
 
         public NodeInformation[] Ping(Uri targetUri, NodeInformation localInformation, NodeInformation[] membersInformation)
         {
             if (Fail)
-                throw new Exception("Emulator network exception");
+                throw new Exception(string.Format("Node {0} is failed", LocalUri));
 
-            var transport = _transports[targetUri] as GossipEmulatorTransport;
+            if (_env.RandomFailure())
+                throw new Exception("Network exception (local)");
+
+            var transport = _env.Transports[targetUri] as GossipEmulatorTransport;
 
             return transport.IncomingPingCallback(localInformation, membersInformation);
         }
@@ -180,7 +188,10 @@ namespace jac.mp.Emulation
             get
             {
                 if (Fail)
-                    throw new Exception("Emulator network exception");
+                    throw new Exception(string.Format("Node {0} is failed", LocalUri));
+
+                if (_env.RandomFailure())
+                    throw new Exception("Network exception (remote)");
 
                 return _pingRequestHandler;
             }
@@ -191,10 +202,15 @@ namespace jac.mp.Emulation
         }
     }
 
-    public interface IEmulatorTransport
+    public interface IEmulationTransport
     {
         bool Fail { get; set; }
     }
 
+    public interface IEmulationEnvironment
+    {
+        Dictionary<Uri, IEmulationTransport> Transports { get; }
+        bool RandomFailure();
+    }
 
 }
