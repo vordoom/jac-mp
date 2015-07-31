@@ -6,21 +6,27 @@ using log4net;
 using System.Configuration;
 using jac.mp.Gossip.Configuration;
 using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 namespace jac.mp.Gossip
 {
+    // todo: ping in push mode does not update heartbeat of target node
+    // todo: implement WCF transport
+    // todo: change callback to event
+    // todo: simple console application
+    // todo: enable/disabe multi-threading (remove Thread.Sleep in tests)
     // todo: emulator should be well-designed
     // todo: collect performance metrics 
-    // todo: implement WCF transport
-    // todo: simple console application
 
     // todo: onfiguration (who should hold URI - local, remote nodes)
-    // todo: concurentDictionary
-    // todo: check other multythreading issues (client read Nodes / gossip updates members -> exception)
     // todo: should not be 'blackout' situation, when all nodes removed (no-one to ping)
 
     public class GossipStrategy : IStrategy
     {
+        private const int UPDATING = 1;
+        private const int IDLE = 0;
+
         #region Static members.
 
         /// <summary>
@@ -39,22 +45,23 @@ namespace jac.mp.Gossip
 
         #endregion
 
+        private readonly object _syncRoot = new object();
         private readonly GossipConfiguration _configuration;
         private readonly IGossipTransport _transport;
-        private readonly Dictionary<Uri, MemberInfo> _membersList = new Dictionary<Uri, MemberInfo>();
+        private readonly ConcurrentDictionary<Uri, MemberInfo> _membersList = new ConcurrentDictionary<Uri, MemberInfo>();
         private readonly Random _random;
         private readonly Uri _localUri;
         private readonly ILog _log = null;
         private long _heartbeat;
         private long _timeStamp;
-        private IEnumerable<Node> _activeNodes;
+        private int _state = IDLE;
 
         public event EventHandler<Node> NodeJoined;
         public event EventHandler<Node> NodeFailed;
 
         public IEnumerable<Node> Nodes
         {
-            get { return _activeNodes; }
+            get { return _membersList.Values.Where(a => a.State == MemberState.Ok).Select(a => a.NodeData); }
         }
 
         /// <summary>
@@ -85,11 +92,10 @@ namespace jac.mp.Gossip
 
             _configuration = configuration.Clone();
             _random = configuration.RandomSeed < 0 ? new Random() : new Random(configuration.RandomSeed);
-            _log = LogManager.GetLogger(this.GetType());
+            _log = LogManager.GetLogger(GetType());
 
             _transport = transport;
             _transport.IncomingPingCallback = OnPingRequest;
-            _activeNodes = _membersList.Values.Where(a=>a.State == MemberState.Ok).Select(a => a.NodeData);
 
             // try to get local URI
             try
@@ -118,72 +124,111 @@ namespace jac.mp.Gossip
         /// </summary>
         public void Update()
         {
-            // todo: concurrency
-            _timeStamp++;
+            var originalValue = Interlocked.Exchange(ref _state, UPDATING);
+            if (originalValue != IDLE)
+            {
+                _log.DebugFormat("'{0}' Another update is already running.");
+                return;
+            }
 
+            try
+            {
+                Interlocked.Increment(ref _timeStamp);
+                Interlocked.Increment(ref _heartbeat);
+
+                // ping random nodes
+                NodeInformation[] allUpdates = GetUpdates();
+
+                lock (_syncRoot)
+                {
+                    var membersState = UpdateMembers(allUpdates);
+                    var newMembers = membersState.Where(a => a.Value == UpdateResult.IsNew).Select(a => _membersList[a.Key].NodeData).ToArray();
+
+                    // process not responding nodes -> mark as failed
+                    var toMarkAsFail = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.FailTimeout).Select(a => a.Value);
+                    foreach (var v in toMarkAsFail)
+                        v.State = MemberState.Failed;
+
+                    var failedMembers = toMarkAsFail.Select(a => a.NodeData).ToArray();
+
+                    // process nodes to remove
+                    var toRemove = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.RemoveTimeout).Select(a => a.Value.NodeData.Address).ToArray();
+                    foreach (var uri in toRemove)
+                    {
+                        MemberInfo info;
+                        _membersList.TryRemove(uri, out info);
+                    }
+
+                    Task.Run(() => RaiseNotifications(newMembers, failedMembers));
+                }
+            }
+            finally
+            {
+                _state = IDLE;
+            }
+        }
+
+        /// <summary>
+        /// Ping nodes and collect updates.
+        /// </summary>
+        /// <returns>Collected updates from all nodes.</returns>
+        private NodeInformation[] GetUpdates()
+        {
+            var pingNodes = GetRandomNodes();
             var localInformation = new NodeInformation() { Address = _localUri, Hearbeat = _heartbeat };
+            var updatesQueue = new ConcurrentQueue<NodeInformation>();
+            NodeInformation[] membersInformation = null;
 
-            // ping random nodes
-            int number = _configuration.RequestsPerUpdate < _membersList.Count ? _configuration.RequestsPerUpdate : _membersList.Count;
-            var pingNodes = _membersList.Keys.OrderBy(x => _random.Next()).Take(number);
+            if (_configuration.InformationExchangePattern == InformationExchangePattern.Push ||
+                _configuration.InformationExchangePattern == InformationExchangePattern.PushPull)
+                membersInformation = GetNodesInformation();
+            else
+                membersInformation = new NodeInformation[0];
 
-            foreach(var uri in pingNodes)
+            // ping nodes
+            foreach (var uri in pingNodes)
             {
-                Ping(uri, localInformation);
+                var result = Ping(uri, localInformation, membersInformation);
+                updatesQueue.EnqueueAll(result);
             }
 
-            // process not responding nodes -> mark as failed
-            var result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.FailTimeout).Select(a => a.Value);
-            foreach (var v in result)
-            {
-                v.State = MemberState.Failed;
+            // process results
+            Dictionary<Uri, long> updates = new Dictionary<Uri, long>();
 
-                OnNodeFailed(v.NodeData);
+            while (updatesQueue.Count > 0)
+            {
+                NodeInformation r;
+                if (updatesQueue.TryDequeue(out r) == false)
+                    continue;
+
+                if (updates.ContainsKey(r.Address) == false)
+                    updates[r.Address] = r.Hearbeat;
+                else if (updates[r.Address] < r.Hearbeat)
+                    updates[r.Address] = r.Hearbeat;
             }
 
-            // process nodes to remove
-            result = _membersList.Where(a => a.Value.Timestamp < _timeStamp - _configuration.RemoveTimeout).Select(a => a.Value).ToArray();
-            foreach (var v in result)
-            {
-                var node = v.NodeData;
-                _membersList.Remove(node.Address);
-            }
+            return updates.Select(a => new NodeInformation() { Address = a.Key, Hearbeat = a.Value }).ToArray();
         }
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="nodeUri"></param>
-        private void Ping(Uri nodeUri, NodeInformation localInformation)
+        private NodeInformation[] Ping(Uri nodeUri, NodeInformation localInformation, NodeInformation[] membersInformation)
         {
             _log.DebugFormat("{0} \t sending ping request to {1}", _localUri, nodeUri);
 
-            Interlocked.Increment(ref _heartbeat);
-
             try
             {
-                NodeInformation[] membersInformation = null;
-
-                // send members information only if exchange pattern is NOT Pull
-                if (_configuration.InformationExchangePattern != InformationExchangePattern.Pull)
-                    membersInformation = GetNodesInformation();
-                else
-                    membersInformation = new NodeInformation[0];
-
                 var result = _transport.Ping(nodeUri, localInformation, membersInformation);
 
-                if (result == null)
-                    throw new Exception(string.Format("Ping of node '{0}' returned null result.", nodeUri));
-
-                // update only current node if no information provided
-                if (result.Length == 0)
-                    _membersList[nodeUri].Timestamp = _timeStamp;
-                else
-                    UpdateMembers(result);
+                return result ?? new NodeInformation[0];
             }
             catch (Exception ex)
             {
                 _log.Debug(string.Format("Failed to ping node {0}", nodeUri), ex);
+
+                return new NodeInformation[0];
             }
         }
 
@@ -204,59 +249,77 @@ namespace jac.mp.Gossip
 
             Interlocked.Increment(ref _heartbeat);
 
-            // update sender related information
-            UpdateMember(senderInformation);
+            lock (_syncRoot)
+            {
+                Node[] newMembers = null;
 
-            // update members if available
-            if (membersInformation.Length > 0)
-                UpdateMembers(membersInformation);
+                // update sender related information
+                UpdateMember(senderInformation);
 
-            // send members information only if exchange pattern is NOT Push
-            if (_configuration.InformationExchangePattern != InformationExchangePattern.Push)
+                // update members if available
+                if (membersInformation.Length > 0)
+                {
+                    var results = UpdateMembers(membersInformation);
+                    newMembers = results.Where(a => a.Value == UpdateResult.IsNew).Select(a => _membersList[a.Key].NodeData).ToArray();
+                }
+
+                Task.Run(() => RaiseNotifications(newMembers, null));
+            }
+
+            if (_configuration.InformationExchangePattern == InformationExchangePattern.Pull ||
+                _configuration.InformationExchangePattern == InformationExchangePattern.PushPull)
                 return GetNodesInformation();
             else
-                return new NodeInformation[0];
+                return new NodeInformation[] { new NodeInformation { Address = _localUri, Hearbeat = _heartbeat } };
         }
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="result"></param>
-        private void UpdateMembers(NodeInformation[] nodesInformation)
+        private Dictionary<Uri, UpdateResult> UpdateMembers(NodeInformation[] nodesInformation)
         {
+            var results = new Dictionary<Uri, UpdateResult>();
+
             foreach (var n in nodesInformation)
-                UpdateMember(n);
+                results[n.Address] = UpdateMember(n);
+
+            return results;
         }
 
         /// <summary>
         /// 
         /// </summary>
         /// <param name="nodeInformation"></param>
-        private void UpdateMember(NodeInformation nodeInformation)
+        private UpdateResult UpdateMember(NodeInformation nodeInformation)
         {
             if (nodeInformation.Address == _localUri)
-                return;
+                return UpdateResult.IsOrigianl;
 
-            if (_membersList.ContainsKey(nodeInformation.Address) == false)
+            MemberInfo node;
+            if (_membersList.TryGetValue(nodeInformation.Address, out node) == false)
             {
                 AddNewNode(nodeInformation.Address, nodeInformation.Hearbeat);
+
+                return UpdateResult.IsNew;
             }
-            else
+
+            if (node.Heartbeat < nodeInformation.Hearbeat)
             {
-                var node = _membersList[nodeInformation.Address];
+                node.Heartbeat = nodeInformation.Hearbeat;
+                node.Timestamp = _timeStamp;
 
-                if (node.Heartbeat < nodeInformation.Hearbeat)
+                if (node.State != MemberState.Ok)
                 {
-                    node.Heartbeat = nodeInformation.Hearbeat;
-                    node.Timestamp = _timeStamp;
+                    node.State = MemberState.Ok;
 
-                    if (node.State != MemberState.Ok)
-                    {
-                        node.State = MemberState.Ok;
-                        OnNodeJoined(node.NodeData);
-                    }
+                    return UpdateResult.IsNew;
                 }
+
+                return UpdateResult.IsUpdated;
             }
+
+            return UpdateResult.IsOrigianl;
         }
 
         /// <summary>
@@ -274,9 +337,7 @@ namespace jac.mp.Gossip
                 NodeData = new Node(uri)
             };
 
-            _membersList.Add(uri, node);
-            
-            OnNodeJoined(node.NodeData);
+            _membersList.TryAdd(uri, node);
         }
 
         /// <summary>
@@ -286,6 +347,38 @@ namespace jac.mp.Gossip
         private NodeInformation[] GetNodesInformation()
         {
             return _membersList.Where(a => a.Value.State == MemberState.Ok).Select(a=> new NodeInformation() { Address = a.Key, Hearbeat = a.Value.Heartbeat }).ToArray();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private IEnumerable<Uri> GetRandomNodes()
+        {
+            lock (_syncRoot)
+            {
+                int number = _configuration.RequestsPerUpdate < _membersList.Count 
+                    ? _configuration.RequestsPerUpdate 
+                    : _membersList.Count;
+
+                return _membersList.Keys.OrderBy(x => _random.Next()).Take(number).ToArray();
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="newNodes"></param>
+        /// <param name="failedNodes"></param>
+        private void RaiseNotifications(Node[] newNodes, Node[] failedNodes)
+        {
+            if (newNodes != null)
+                foreach (var v in newNodes)
+                    OnNodeJoined(v);
+
+            if (failedNodes != null)
+                foreach (var v in failedNodes)
+                    OnNodeFailed(v);
         }
 
         /// <summary>
@@ -317,5 +410,12 @@ namespace jac.mp.Gossip
     {
         Ok,
         Failed
+    }
+
+    public enum UpdateResult
+    {
+        IsNew,
+        IsUpdated,
+        IsOrigianl
     }
 }
