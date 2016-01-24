@@ -24,7 +24,7 @@ namespace jac.mp.Gossip
 
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
-            transport.Ping(knownNodeUri, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>()).Returns(newNodes);
+            transport.Ping(knownNodeUri, Arg.Any<NodeInformation[]>()).Returns(newNodes);
 
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
@@ -54,7 +54,7 @@ namespace jac.mp.Gossip
 
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
-            transport.Ping(knownNodeUri, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>()).Returns(newNodes);
+            transport.Ping(knownNodeUri, Arg.Any<NodeInformation[]>()).Returns(newNodes);
 
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
@@ -76,7 +76,7 @@ namespace jac.mp.Gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
             transport
-                .Ping(knownNodeUri, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
+                .Ping(knownNodeUri, Arg.Any<NodeInformation[]>())
                 .Returns(a => new NodeInformation[] { new NodeInformation() { Address = knownNodeUri, Hearbeat = counter } });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
@@ -105,7 +105,7 @@ namespace jac.mp.Gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
             transport
-                .Ping(knownNodeUri, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
+                .Ping(knownNodeUri, Arg.Any<NodeInformation[]>())
                 .Returns(a => new NodeInformation[] { new NodeInformation() { Address = knownNodeUri, Hearbeat = counter } });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
@@ -139,11 +139,11 @@ namespace jac.mp.Gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
             transport
-                .Ping(nodeOk, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
+                .Ping(nodeOk, Arg.Any<NodeInformation[]>())
                 .Returns(a => new NodeInformation[] { new NodeInformation() { Address = nodeOk, Hearbeat = counter } });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { nodeOk, nodeFail }, transport, GossipConfiguration.DefaultConfiguration);
-            strategy.NodeFailed += (o, e) => { nodeFailCalled = true; };
+            strategy.NodeFailed += (o, e) => { nodeFailCalled = e.Address == nodeFail; };
 
             // act
             for (int i = 0; i < 100; i++)
@@ -170,7 +170,7 @@ namespace jac.mp.Gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
             transport
-                .Ping(nodeOk, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
+                .Ping(nodeOk, Arg.Any<NodeInformation[]>())
                 .Returns(a => new NodeInformation[] { new NodeInformation() { Address = nodeOk, Hearbeat = counter } });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { nodeOk, nodeFail }, transport, GossipConfiguration.DefaultConfiguration);
@@ -196,7 +196,7 @@ namespace jac.mp.Gossip
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
             transport
-                .Ping(knownNode, Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
+                .Ping(knownNode, Arg.Any<NodeInformation[]>())
                 .Returns(a => { throw new Exception(); });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNode }, transport, GossipConfiguration.DefaultConfiguration);
@@ -216,6 +216,7 @@ namespace jac.mp.Gossip
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
             Uri newNodeUri = new Uri("tcp://127.0.0.3");
             var updateInformation = new NodeInformation[] {
+                new NodeInformation() { Address = knownNodeUri, Hearbeat = 6 },
                 new NodeInformation() { Address = newNodeUri, Hearbeat = 5 },
                 new NodeInformation() { Address = localUri, Hearbeat = 5 }
             };
@@ -229,7 +230,7 @@ namespace jac.mp.Gossip
             strategy.NodeJoined += (o, e) => { called = e.Address == newNodeUri; };
 
             // act
-            transport.IncomingPingCallback(new NodeInformation() { Address = knownNodeUri, Hearbeat = 6 }, updateInformation);
+            transport.IncomingPingCallback(knownNodeUri, updateInformation);
 
             Thread.Sleep(1000);
 
@@ -245,6 +246,7 @@ namespace jac.mp.Gossip
             Uri knownNodeUri = new Uri("tcp://127.0.0.2");
             Uri newNodeUri = new Uri("tcp://127.0.0.3");
             var updateInformation = new NodeInformation[] {
+                new NodeInformation() { Address = knownNodeUri, Hearbeat = 6 },
                 new NodeInformation() { Address = newNodeUri, Hearbeat = 5 },
                 new NodeInformation() { Address = localUri, Hearbeat = 5 }
             };
@@ -255,7 +257,7 @@ namespace jac.mp.Gossip
             IStrategy strategy = new GossipStrategy(new Uri[] { knownNodeUri }, transport, GossipConfiguration.DefaultConfiguration);
 
             // act
-            transport.IncomingPingCallback(new NodeInformation() { Address = knownNodeUri, Hearbeat = 6 }, updateInformation);
+            transport.IncomingPingCallback(knownNodeUri, updateInformation);
 
             // assert
             Assert.IsTrue(strategy.Nodes.Any(a => a.Address == newNodeUri), "New node should be added to collection.");
@@ -272,9 +274,6 @@ namespace jac.mp.Gossip
 
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
-            transport
-                .Ping(Arg.Any<Uri>(), Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
-                .Returns(a => new NodeInformation[] { });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { node1, node2 }, transport, GossipConfiguration.DefaultConfiguration);
 
@@ -283,15 +282,19 @@ namespace jac.mp.Gossip
             {
                 counter++;
 
-                strategy.Update();
-                transport.IncomingPingCallback(
-                    new NodeInformation() { Address = node1, Hearbeat = counter },
-                    new NodeInformation[] { new NodeInformation() { Address = node2, Hearbeat = counter } }
+                transport.IncomingPingCallback(node1, 
+                    new NodeInformation[] { 
+                        new NodeInformation() { Address = node1, Hearbeat = counter },
+                        new NodeInformation() { Address = node2, Hearbeat = counter }
+                    }
                 );
             }
 
+            var node1ok = strategy.Nodes.Any(a => a.Address == node1);
+            var node2ok = strategy.Nodes.Any(a => a.Address == node2);
+
             // assert
-            Assert.IsTrue(strategy.Nodes.Any(a => a.Address == node2), "Alive node should not be removed from collection.");
+            Assert.IsTrue(node1ok && node2ok, "Alive node should not be removed from collection.");
         }
 
         [TestMethod]
@@ -307,9 +310,6 @@ namespace jac.mp.Gossip
 
             var transport = Substitute.For<IGossipTransport>();
             transport.LocalUri.Returns(localUri);
-            transport
-                .Ping(Arg.Any<Uri>(), Arg.Any<NodeInformation>(), Arg.Any<NodeInformation[]>())
-                .Returns(a => new NodeInformation[] { });
 
             IStrategy strategy = new GossipStrategy(new Uri[] { node1, node2 }, transport, GossipConfiguration.DefaultConfiguration);
             strategy.NodeJoined += (o, e) => { nodeJoinCalled = true; };
@@ -320,18 +320,18 @@ namespace jac.mp.Gossip
             {
                 counter++;
 
-                strategy.Update();
-                transport.IncomingPingCallback(
-                    new NodeInformation() { Address = node1, Hearbeat = counter },
-                    new NodeInformation[] { new NodeInformation() { Address = node2, Hearbeat = counter } }
+                transport.IncomingPingCallback(node1,
+                    new NodeInformation[] { 
+                        new NodeInformation() { Address = node1, Hearbeat = counter },
+                        new NodeInformation() { Address = node2, Hearbeat = counter }
+                    }
                 );
             }
 
             Thread.Sleep(1000);
 
             // assert
-            Assert.IsTrue(nodeJoinCalled == false, "'NodeJoined' event should not be rasied when no new nodes.");
-            Assert.IsTrue(nodeFailCalled == false, "'NodeFailed' event should not be rasied when no fail nodes.");
+            Assert.IsTrue(nodeJoinCalled == false && nodeFailCalled == false, "'NodeJoined' and 'NodeFailed' events should not be rasied when no new nodes.");
         }
     }
 }

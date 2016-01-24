@@ -12,9 +12,9 @@ namespace jac.mp.Emulation
 {
     public class Emulator: IEmulationEnvironment
     {
-        private const int randomSeed = 11;
+        private const int randomSeed = 14;
         private const int requestsPerUpdate = 2;
-        private const InformationExchangePattern informationExchangePattern = InformationExchangePattern.PushPull;
+        private const InformationExchangePattern informationExchangePattern = InformationExchangePattern.Pull;
         private const int numOfIterations = 100;
         private const int numOfNodes = 100;
         private const int numOfFailedNodes = 1;
@@ -168,7 +168,7 @@ namespace jac.mp.Emulation
             _env = env;
         }
 
-        public NodeInformation[] Ping(Uri targetUri, NodeInformation localInformation, NodeInformation[] membersInformation)
+        public NodeInformation[] Ping(Uri targetUri, NodeInformation[] membersInformation)
         {
             if (Fail)
                 throw new Exception(string.Format("Node {0} is failed", LocalUri));
@@ -178,7 +178,7 @@ namespace jac.mp.Emulation
 
             var transport = _env.Transports[targetUri] as GossipEmulatorTransport;
 
-            return transport.IncomingPingCallback(localInformation, membersInformation);
+            return transport.IncomingPingCallback(transport.LocalUri, membersInformation);
         }
 
         public bool Fail { get; set; }

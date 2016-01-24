@@ -19,9 +19,9 @@ namespace jac.mp
 
     }
 
-    public static class ConcurrentQueueExtensions
+    public static class QueueExtensions
     {
-        public static void EnqueueAll<T>(this ConcurrentQueue<T> queue, IEnumerable<T> items)
+        public static void EnqueueAll<T>(this Queue<T> queue, IEnumerable<T> items)
         {
             foreach (var i in items)
                 queue.Enqueue(i);
